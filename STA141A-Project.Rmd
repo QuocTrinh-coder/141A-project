@@ -1,0 +1,648 @@
+---
+title: "141A-project"
+author: "QuocTrinh"
+date: "2024-03-18"
+output: html_document
+---
+```{r echo = FALSE, message = FALSE, warning = FALSE}
+suppressWarnings(library(tidyverse))
+suppressWarnings(library(knitr))
+suppressWarnings(library(dplyr))
+#install.packages("kableExtra")
+library(kableExtra)
+library(ggplot2)
+library(caret)
+library(e1071)
+library(gbm)
+```
+# Abstract
+
+  In this project, I analyze a portion of a study of mouse brain done by Steinmetz Nicholas A. Steinmetz, Peter Zatka-Haas, Matteo Carandini & Kenneth D. Harris. These 4 authors are professors from University College London in the UK. Specifically, I will examine the mouses' brain activity as they were given visual stimuli randomly on two screens positioned on both sides of it. This project will focus on 4 mouses out of 10 mouses over 18 sessions out of 39 from the original data. In each session, there will be hundreds of trials and record of neurons' activities in the mice's visual cortex. These activities then recorded in the form of spike trains, which are collections of timestamps corresponding to neuron firing. The four mouses that will be focused on are called : Cori, Forssman, Hence, and Lederberg. I began the project by examining the data structure across 18 sessions and transform it into a dataframe. Additionally, I also create a dataframe specficially for a case study of the spikes activities for session 8 trial 8. After that, a thorough exploratory data analysis was conducted in order to examine for patterns across all 18 sessions and the spikes activities over times across trials within session 8. Then, I performed data integration with the purpose of combining all sessions together into 1 dataframe for model building process and filter out neccessary features. Finally, I fitted multiple models and picked the highest accuracy model with the goal of classifying whether a trial will be a success or failure. This project aims to uncover insights into the relationship between neural activity and decision-making processe of mouses and examining whether it is possible to predict a trial outcome ( success or failure of turning the wheel to the correct side base of the contrast differences ) using multiple features that produced by the mouse over certain time within each trial. 
+
+# Introduction
+
+This project aim to create a predictive model that utilizes neural activity data and visual stimuli to predict trial outcomes. The dataset employed is a subset of recordings derived from experiments conducted by Nicholas A. Steinmetz, Peter Zatka-Haas, Matteo Carandini and Kenneth D. Harris involving 10 mice across 39 sessions. These experiments aimed to observe action and engagement patterns in the mouse brain in response to visual stimuli. Specifically, this analysis focuses on a subset of 18 sessions involving four mice: Cori, Frossman, Hence, and Lederberg.
+
+During each trial, visual stimuli with different contrast levels were presented on two screens positioned adjacent to the mice. The contrast levels ranged from 0 to 1, with 0 indicating no stimulus. Mice made decisions based on these stimuli using a wheel controlled by their forepaws. Feedback, classified as success (1) or failure (-1), was provided to the mice based on their wheel-turning behavior. For instance, if the left contrast exceeded the right contrast and the wheel was turned to the right, it would count as a success (1); otherwise, it was considered a failure (-1). If the contrast difference between left and right was zero, not turning the wheel counted as a success, and failure otherwise.
+
+Neural activity in the mice's visual cortex was recorded in the form of spike trains, focusing on the period from stimulus onset to 0.4 seconds post-onset. Key variables in the dataset include feedback type (success or failure), contrast levels for left and right stimuli, time bins for spike train data, spike counts, and the brain area where each neuron is located.
+
+This project is structured into three main parts: exploratory data analysis, data integration, and model training and prediction. In Part 1, we will perform exploratory data analysis to characterize data structures across sessions, examine neural activities during trials, assess changes across trials, and evaluate homogeneity and heterogeneity across sessions and mice. These insights will inform the development of an effective prediction model.
+
+Part 2 will focus on data integration, where methods to combine data across trials will be proposed. This may involve identifying shared patterns across sessions. The aim is to leverage information from multiple sessions to improve the prediction accuracy of our model.
+
+Finally, in Part 3, we will build a predictive model to forecast trial outcomes accurately. The model's performance will be assessed using two test sets comprising 100 randomly selected trials from Session 1 and Session 18, respectively. The findings of this analysis will have practical implications, contributing to our understanding of the relationship between neural activity and decision-making processes.
+
+
+# Data Structure
+
+```{r echo = FALSE}
+session <- list()
+for (i in 1:18) {
+  session[[i]] <- readRDS(paste('C:/Users/Harry Trinh/Downloads/sessions/session', i, '.rds', sep=''))
+}
+```
+
+```{r}
+test <- list()
+for (i in 1:2) {
+  test[[i]] <- readRDS(paste('C:/Users/Harry Trinh/Downloads/testing/test', i, '.rds', sep=''))
+}
+```
+
+### Attributes Within Each Sessions
+
+Within each trial in each session, there will be 8 variables as they are listed below:
+```{r echo = FALSE}
+names(session[[1]])
+```
+#### Definition for each variables
+
+- contrast_left represents contrast of the left stimulus
+- contrast_right represents contrast of the right stimulus
+- feedback_type represents the type of the feedback for the mice, 1 for success and -1 for failure
+- mouse_name represents the name of the mice that experiment on
+- brain_area represents the area of the brain where each neuron lives
+- spks represents numbers of spikes of neurons in the visual cortex in time bins defined in time
+- time represents centers of the time bins for spks
+- date_exp represent the date of the experiments
+
+# Part 1: Exploratory Data Analysis
+
+In order to perform data analysis, I organized the information from all sessions into 1 dataframe. I combined all the variables from each session that I stated above. Additionally, I also added in the sucess rate ( calculated by using feedback type ), average spikes ( calculated by taking the average all all spks from all trials in each session ), and contrast difference which calculated by subtracting contrast left by contrast right. 
+
+```{r echo = FALSE}
+# Create data frame across sessions
+total_session = 18 
+meta <- tibble(
+    mouse_name = rep('name',total_session),
+    date_exp =rep('dt',total_session),
+    num_brain_area = rep(0,total_session),
+    num_neurons = rep(0,total_session),
+    num_trials = rep(0,total_session),
+    success_rate = rep(0,total_session),
+)
+# Store data into the data frame
+for(i in 1:total_session){
+  tmp = session[[i]];
+  meta[i,1]=tmp$mouse_name;
+  meta[i,2]=tmp$date_exp;
+  meta[i,3]=length(unique(tmp$brain_area));
+  meta[i,4]=dim(tmp$spks[[1]])[1];
+  meta[i,5]=length(tmp$feedback_type);
+  meta[i,6]=mean(tmp$feedback_type+1)/2;
+}
+
+meta = as.data.frame(meta)
+
+# Define a function to calculate average spikes per neuron
+calculate_avg_spks <- function(session_data) {
+  total_spikes <- sum(unlist(lapply(session_data$spks, function(x) sum(x))))
+  total_neurons <- sum(unlist(lapply(session_data$spks, function(x) nrow(x))))
+  return(total_spikes / total_neurons)
+}
+
+# Calculate average spikes for each session and add it as a new column in the meta data frame
+meta$avg_spks <- sapply(session, calculate_avg_spks)
+                                     
+# Define a function to calculate contrast difference for a session
+calculate_contrast_difference <- function(session_data) {
+  abs_diff <- abs(session_data$contrast_left - session_data$contrast_right)
+  return(mean(abs_diff))
+}
+
+# Calculate contrast difference for each session and add it as a new column in the meta data frame
+meta$contrast_difference <- sapply(session, calculate_contrast_difference)
+
+# creates a formatted table with a header, styling, and a footnote describing the data structure across sessions
+table_footnote <- "Table 1.Data Structure across Sessions"
+
+meta_table <- meta %>%
+  kable() %>%
+  add_header_above(c('Selected Data with Eight Variables' = 8)) %>%
+  kable_styling() %>%
+  add_footnote(c(table_footnote))
+
+# Display the updated meta data frame
+meta_table
+```
+
+Beside creating a data frame of all sessions summary, I also create a seperate dataset to for a case study on how neural activities change for different brain area over different trial. Below is the first 6 observations of the dataframe extracted from session 8. This data frame include different nerual activities across different brain areas, the feedback, left and right contrast and the count of the number of trials in session 8 ( 250 trials ). 
+
+```{r echo = FALSE}
+i.s <- 8 # indicator for this session
+i.t <- 8 # indicator for this trial 
+
+spk.trial <- session[[i.s]]$spks[[i.t]]
+area <- session[[i.s]]$brain_area
+
+spk.count <- apply(spk.trial, 1, sum)
+
+spk.average.tapply <- tapply(spk.count, area, mean)
+
+# To use dplyr you need to create a data frame
+tmp <- data.frame(
+  area = area,
+  spikes = spk.count
+)
+# Calculate the average by group using dplyr
+spk.average.dplyr <- tmp %>%
+  group_by(area) %>%
+  summarize(mean = mean(spikes))
+
+
+average_spike_area <- function(i.t, this_session) {
+  spk.trial <- this_session$spks[[i.t]]
+  area <- this_session$brain_area
+  spk.count <- apply(spk.trial, 1, sum)
+  spk.average.tapply <- tapply(spk.count, area, mean)
+  return(spk.average.tapply)
+}
+
+n.trial <- length(session[[i.s]]$feedback_type)
+n.area <- length(unique(session[[i.s]]$brain_area))
+
+# We will create a data frame that contains the average spike counts for each area, feedback type, the two contrasts, and the trial id
+
+trial.summary <- matrix(nrow = n.trial, ncol = n.area + 1 + 2 + 1)
+for(i.t in 1:n.trial) {
+  trial.summary[i.t,] <- c(average_spike_area(i.t, this_session = session[[i.s]]),
+                            session[[i.s]]$feedback_type[i.t],
+                            session[[i.s]]$contrast_left[i.t],
+                            session[[i.s]]$contrast_right[i.t],  # corrected index from i.s to i.t
+                            i.t)
+}
+
+colnames(trial.summary) <- c(names(average_spike_area(i.t, this_session = session[[i.s]])), 
+                              'feedback', 'left contr.', 'right contr.', 'id')
+
+# Turning it into a data frame
+trial.summary <- as_tibble(trial.summary)
+head(trial.summary)
+```
+
+### How does neural activities change as the number of session increase ?
+
+From the graph below, the trend indiciate that as the session number increase, the overall neuron spike rate also increase. However, toward the end of the 18 sessions, the neuron spike rate decreased. This might indicated that the brain of the mouses from session 15 to 18 didn't get effect much after getting the visual stimuli.
+
+```{r echo = FALSE}
+overall_spike_rate <- sapply(session, function(s) {
+  total_spikes <- sum(unlist(lapply(s$spks, sum)))
+  total_trials <- length(s$spks)
+  return(total_spikes / total_trials)
+})
+
+# Plot line chart showing the change of overall neuron spike rate over time
+plot(1:total_session, overall_spike_rate, type = "o", 
+     xlab = "Session Number", ylab = "Overall Neuron Spike Rate",
+     main = "Change of Overall Neuron Spike Rate Over Different Sessions",
+     col = "blue", pch = 19)
+mtext("Figure 1: Overall Neuron Spike Rate Across Sessions", side = 1, line = 4, cex = 1)
+```
+
+In figure 2, we examine the success rate as the contrast difference in each session increase for each mouses. The graph indicates that for Forssmann, Cori, and Hench, the success rate of their trials decreased as the contrast difference in each session increase. However, the success rate for Lederberg increased as the contrast difference in each session increased. This indicated that Lederberg might be more special than the other mouses.
+
+```{r echo = FALSE}
+meta$mouse_name <- as.factor(meta$mouse_name)
+
+ggplot(meta, aes(x = contrast_difference, y = success_rate, group = mouse_name, color = mouse_name)) +
+  geom_line() +
+  geom_point() +
+  labs(x = "Contrast Difference in each session", y = "Success Rate", 
+       title = "Success Rate vs. Contrast Difference in each session", 
+       caption = "Figure 2. Success Rate vs. Contrast Difference in each session") +
+  theme_minimal()
+```
+
+In figure 3, similar pattern appear as the mouse, Hench, is the unsual one. For this, all other mouses' success rate increased as the average spikes in each session go up. However, only the Hench mouse success rate goes down as the average spikes increase.
+
+```{r echo = FALSE}
+ggplot(meta, aes(x = avg_spks, y = success_rate, group = mouse_name, color = mouse_name)) +
+  geom_line() +
+  geom_point() +
+  labs(x = "Average Spikes in each session", y = "Success Rate", 
+       title = "Success Rate vs. Average Spikes in each session", 
+       caption = "Figure 3. Success Rate vs. Average Spikes of Neurons in the visual cortex for each mouse") +
+  theme_minimal()
+```
+
+In figure 4, the success rate for each mouse decreased at first, however, the toward the end, the success rate started to increased as the number of brain area in each session increased. Out of all the mouses, Lederberg success rate fluctuate the most compare to other mouses. 
+
+```{r echo = FALSE}
+ggplot(meta, aes(x = num_brain_area, y = success_rate, group = mouse_name, color = mouse_name)) +
+  geom_line() +
+  geom_point() +
+  labs(x = "Number of Brain Area in each session", y = "Success Rate", 
+       title = "Success Rate vs. Number of Brain Area in each session", 
+       caption = "Figure 4. Number of Brain Area vs. Success Rate across mouses") +
+  theme_minimal()
+```
+```{r echo = FALSE}
+ggplot(meta, aes(x = num_neurons, y = success_rate, group = mouse_name, color = mouse_name)) +
+  geom_line() +
+  geom_point() +
+  labs(x = "Number of Neurons in each session", y = "Success Rate", 
+       title = "Success Rate vs. Number of Neurons in each session", 
+       caption = "Figure 5. Number of Neurons per Area vs. Failure Rate across all mouses") +
+  theme_minimal()
+```
+
+In figure 5, I examine if there are any trend between number of neurons per area to success rate. In the graph, there is a clear trend that as the number of neurons per area increased, the success rate also increased.
+
+```{r echo = FALSE}
+meta$mouse_name <- as.factor(meta$mouse_name)
+
+meta$num_new_per_area <- meta$num_neurons / meta$num_brain_area
+
+ggplot(meta, aes(x = num_new_per_area, y = success_rate, group = mouse_name, color = mouse_name)) +
+  geom_line() +
+  geom_point() +
+  labs(x = "Number of Neurons per Area", y = "Success Rate", 
+       title = "Number of Neurons per Area vs. Success Rate", 
+       caption = "Figure 6. Number of Neurons per Area vs. Failure Rate across mice") +
+  theme_minimal()
+```
+
+In figure 6, the graph indicate that as the number of trials increase, the success rate fluctuate. However, toward the end, there is a clear trend that all the success rate decreased.
+
+```{r echo = FALSE}
+meta$mouse_name <- as.factor(meta$mouse_name)
+
+ggplot(meta, aes(x = num_trials, y = success_rate, group = mouse_name, color = mouse_name)) +
+  geom_line() +
+  geom_point() +
+  labs(x = "Number of Trials", y = "Success Rate", 
+       title = "Number of Trials vs. Success Rate", 
+       caption = "Figure 7. Number of Trials vs. Success Rate across all mouses") +
+  theme_minimal()
+```
+
+In figure 8, this is a bar graph showing the success rate across all session. There is a trend showing that the success rate slowly increased as the session number increased. This indicate that the effect of the visual stimuli didn't impact the neural activity as much early on as later.
+
+```{r}
+ggplot(meta, aes(x = factor(1:total_session), y = success_rate)) +
+  geom_bar(stat = "identity", fill = "skyblue") +
+  labs(x = "Session Number", y = "Success Rate") +
+  ggtitle("Success Rate Over All Trials Within Each Session") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1),
+        plot.caption = element_text(hjust = 0.5, margin = margin(t = 20))) +
+  labs(caption = "Figure 8: Success Rate Over All Trials Across Each Session")
+```
+
+ii) For this part, I addressed the differences between sessions through a case study. I choose Session 8 trial 1,5,10,15,20, 25,30 to explore the neural activities during each trail. After putting different color to different neural activities across different brain area, we can clearly see that there are changes throughout 7 trails. In conclusion, PO and MOs neural activities has highest neuron across trails and root has lowest neuron.
+
+```{r echo = FALSE}
+area.col <- rainbow(n = n.area, alpha = 0.7)
+
+trial<-function(trial_number,area, area_color,session){
+    number_neurons=dim(session$spks[[trial_number]])[1]
+    time_at_different_point =session$time[[trial_number]]
+    
+    plot(NA,xlim=c(min(time_at_different_point),max(time_at_different_point)),ylim=c(0,number_neurons+1), 
+         xlab='Time (s)',yaxt='n', ylab='Neuron', main=paste('Trial ',trial_number, 'feedback', session$feedback_type[trial_number] ),cex.lab=1.5)
+    for(i in 1:number_neurons){
+        area_type =which(area== session$brain_area[i]);
+        col.this=area.col[area_type]
+        
+        check_for_spikes =which(session$spks[[trial_number]][i,]>0) # find out when there are spikes 
+        if( length(check_for_spikes)>0 ){
+            points(x=time_at_different_point[check_for_spikes],y=rep(i, length(check_for_spikes) ),pch='.',cex=5, col=col.this)
+        }
+      
+            
+    }
+    
+legend("topright", 
+  legend = area, 
+  col = area.col, 
+  pch = 16, 
+  cex = 0.8
+  )
+}
+
+brain_area = names(trial.summary)[1:15]
+trial(1,brain_area, area.col,session[[i.s]])
+mtext("Session 8 Trial 1 feedback", side = 1, line = 4.1, font = 1)
+trial(5,brain_area, area.col,session[[i.s]])
+mtext("Session 8 Trial 5 feedback", side = 1, line = 4.1, font = 1)
+
+trial(10,brain_area, area.col,session[[i.s]])
+mtext("Session 8 Trial 10 feedback", side = 1, line = 4.1, font = 1)
+
+trial(15,brain_area, area.col,session[[i.s]])
+mtext("Session 8 Trial 15 feedback", side = 1, line = 4.1, font = 1)
+
+trial(20,brain_area, area.col,session[[i.s]])
+mtext("Session 8 Trial 20 feedback", side = 1, line = 4.1, font = 1)
+
+trial(25,brain_area, area.col,session[[i.s]])
+mtext("Session 8 Trial 25 feedback", side = 1, line = 4.1, font = 1)
+
+trial(30,brain_area, area.col,session[[i.s]])
+mtext("Session 8 Trial 30 feedback", side = 1, line = 4.1, font = 1)
+```
+
+iii) For this part, I will examine the changes across trials in session 8. From the plot below we can clearly see that PO neural activity has highest average spikes counts in all trials and root activity has lowest average spikes count as it fluctuates between 0 and 0.5. An interesting observation that I found is during the 200th trial, it looks like all the neural activity dropped down in term of spikes counts. This is an interesting finding since there could be some factor that impact the average spike counts specifically at the 200th trial.
+
+```{r echo = FALSE}
+
+# Set the y-axis limits to include negative values
+plot(x = 1, y = 0, col = 'white', xlim = c(0, n.trial), ylim = c(0, 3), 
+     xlab = "Trials", ylab = "Average spike counts", 
+     main = paste("Spikes per area in Session", i.s))
+
+for (i in 1:n.area) {
+  lines(y = trial.summary[[i]], x = trial.summary$id, col = area.col[i], lty = 2, lwd = 1)
+  lines(smooth.spline(trial.summary$id, trial.summary[[i]]), col = area.col[i], lwd = 3)
+}
+
+legend("topright", 
+       legend = colnames(trial.summary)[1:n.area], 
+       col = area.col, 
+       lty = 1, 
+       cex = 0.8)
+
+mtext("Figure 9. Average spike count across trails in session 8", side = 1, line = 4)
+```
+
+```{r echo = FALSE}
+# Create a data frame with session number and brain areas
+session_brain_areas_df <- data.frame(
+  session_number = rep(1:total_session, meta$num_brain_area),
+  brain_area = unlist(lapply(session, function(s) unique(s$brain_area)))
+)
+
+# Plotting
+ggplot(session_brain_areas_df, aes(x = session_number, y = brain_area)) +
+  geom_point() +
+  labs(x = "Session Number", y = "Brain Area") +
+  ggtitle("Brain Areas with Neurons Recorded in Each Session") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1),
+        plot.caption = element_text(hjust = 0.5, margin = margin(t = 20)))+
+  labs(caption = "Figure 10: Success Rate Over All Trials Across Each Session")
+```
+
+# Part 2: Data Integration
+
+In the integration phase, I compute the average neuron spikes for each time bin within each trial, denoting it as the "trial_bin_average." In the table below, each row presents data for a specific trial, with columns representing the average spike rate for each time bin. Additionally, I also included trial id, contrast left and right, feedback type, average spikes, mouse name, experiment date, session id, ciontrast diff and success. I will be using this data frame as input for the model building process.
+
+```{r echo = FALSE}
+# Train
+binename <- paste0("bin", as.character(1:40))
+
+get_trail_functional_data <- function(session_id, trail_id){
+  spikes <- session[[session_id]]$spks[[trail_id]]
+  if (any(is.na(spikes))){
+    disp("value missing")
+  }
+
+  trail_bin_average <- matrix(colMeans(spikes), nrow = 1)
+  colnames(trail_bin_average) <- binename
+  
+  # Calculate average spikes
+  avg_spks <- mean(spikes)
+  
+  trail_tibble <- as_tibble(trail_bin_average) %>%
+    add_column("trail_id" = trail_id) %>%
+    add_column("contrast_left" = session[[session_id]]$contrast_left[trail_id]) %>%
+    add_column("contrast_right" = session[[session_id]]$contrast_right[trail_id]) %>%
+    add_column("feedback_type" = session[[session_id]]$feedback_type[trail_id]) %>%
+    add_column("avg_spks" = avg_spks) # Add average spikes column
+  
+  return(trail_tibble)
+}
+get_session_functional_data <- function(session_id){
+  n_trail <- length(session[[session_id]]$spks)
+  trail_list <- list()
+  for (trail_id in 1:n_trail){
+    trail_tibble <- get_trail_functional_data(session_id,trail_id)
+    trail_list[[trail_id]] <- trail_tibble
+  }
+  session_tibble <- as_tibble(do.call(rbind, trail_list))
+  session_tibble <- session_tibble %>% add_column("mouse_name" = session[[session_id]]$mouse_name) %>% add_column("date_exp" = session[[session_id]]$date_exp) %>% add_column("session_id" = session_id) 
+  session_tibble
+}
+
+session_list = list()
+for (session_id in 1: 18){
+  session_list[[session_id]] <- get_session_functional_data(session_id)
+}
+full_functional_tibble <- as_tibble(do.call(rbind, session_list))
+full_functional_tibble$session_id <- as.factor(full_functional_tibble$session_id )
+full_functional_tibble$contrast_diff <- abs(full_functional_tibble$contrast_left-full_functional_tibble$contrast_right)
+
+full_functional_tibble$success <- full_functional_tibble$feedback_type == 1
+full_functional_tibble$success <- as.numeric(full_functional_tibble$success)
+
+# View the updated data frame
+head(full_functional_tibble)
+```
+```{r echo = FALSE}
+# Test
+binename <- paste0("bin", as.character(1:40))
+
+get_trail_functional_data <- function(session_id, trail_id){
+  spikes <- test[[session_id]]$spks[[trail_id]]
+  if (any(is.na(spikes))){
+    disp("value missing")
+  }
+
+  trail_bin_average <- matrix(colMeans(spikes), nrow = 1)
+  colnames(trail_bin_average) <- binename
+  
+  # Calculate average spikes
+  avg_spks <- mean(spikes)
+  
+  trail_tibble <- as_tibble(trail_bin_average) %>%
+    add_column("trail_id" = trail_id) %>%
+    add_column("contrast_left" = test[[session_id]]$contrast_left[trail_id]) %>%
+    add_column("contrast_right" = test[[session_id]]$contrast_right[trail_id]) %>%
+    add_column("feedback_type" = test[[session_id]]$feedback_type[trail_id]) %>%
+    add_column("avg_spks" = avg_spks) # Add average spikes column
+  
+  return(trail_tibble)
+}
+get_session_functional_data <- function(session_id){
+  n_trail <- length(test[[session_id]]$spks)
+  trail_list <- list()
+  for (trail_id in 1:n_trail){
+    trail_tibble <- get_trail_functional_data(session_id,trail_id)
+    trail_list[[trail_id]] <- trail_tibble
+  }
+  session_tibble <- as_tibble(do.call(rbind, trail_list))
+  session_tibble <- session_tibble %>% add_column("mouse_name" = test[[session_id]]$mouse_name) %>% add_column("date_exp" = test[[session_id]]$date_exp) %>% add_column("session_id" = session_id) 
+  session_tibble
+}
+
+session_list = list()
+for (session_id in 1: 2){
+  session_list[[session_id]] <- get_session_functional_data(session_id)
+}
+full_functional_tibble_test <- as_tibble(do.call(rbind, session_list))
+full_functional_tibble_test$session_id <- as.factor(full_functional_tibble_test$session_id )
+full_functional_tibble_test$contrast_diff <- abs(full_functional_tibble_test$contrast_left-full_functional_tibble_test$contrast_right)
+
+full_functional_tibble_test$success <- full_functional_tibble_test$feedback_type == 1
+full_functional_tibble_test$success <- as.numeric(full_functional_tibble_test$success)
+```
+
+Since there are a lot of features, meaning there will be many dimensions, I decided to performed PCA to see if it is useful to reduce the dimension of the data in order to help me classify the success rate. However, as shown below, it seems like the first 2 PCs couldn't seperate the data into distinct groups. Additionally, the PC result shows that as the amount of PC increase, the explained variance decreased to 0, meaning that adding more PC won't help me much on predicting success rate. As a result, PCA won't be considered for this project.
+
+```{r echo = FALSE}
+features = full_functional_tibble[,1:40]
+scaled_features <- scale(features)
+pca_result <- prcomp(scaled_features)
+pc_df <- as.data.frame(pca_result$x)
+pc_df$session_id <- full_functional_tibble$session_id
+pc_df$mouse_name <- full_functional_tibble$mouse_name
+
+ggplot(pc_df, aes(x = PC1, y = PC2, color = session_id)) +
+  geom_point() +
+  labs(title = "PCA: PC1 vs PC2")
+
+ggplot(pc_df, aes(x = PC1, y = PC2, color = mouse_name)) +
+  geom_point() +
+  labs(title = "PCA: PC1 vs PC2")
+
+plot(pca_result, type = 'l')
+```
+
+As a final step before model fitting, I chose the features that I will be fitting into the model. For this, I chose trail id, contrast left, contrast right, contrast diff, and all the time bins.
+
+```{r}
+predictive_feature <- c("trail_id","contrast_left", "contrast_right",  "contrast_diff" , binename)
+
+predictive_dat <- full_functional_tibble[predictive_feature]
+
+predictive_dat$trail_id <- as.numeric(predictive_dat$trail_id)
+label <- full_functional_tibble$success
+X <- model.matrix(~., predictive_dat)
+
+test_dat <- full_functional_tibble_test[predictive_feature]
+
+test_dat$trail_id <- as.numeric(test_dat$trail_id)
+test_label <- full_functional_tibble_test$success
+X_test <- model.matrix(~., test_dat)
+head(full_functional_tibble[predictive_feature])
+```
+
+# Part 3: Model Building Process
+
+For the first model, I examined logistic regression since it is a computationally expensive model which fit well for this project since there are a lot of predictive features. Furthermore, logistic regression model is famous for binary classification which is what I am trying to do with the success variable ( 0 or 1 ). This model achieved with a 73% accuracy on the testing dataset.
+
+```{r}
+set.seed(123) # for reproducibility
+
+train_df <- predictive_dat
+train_X <- X
+test_df <- test_dat
+test_X <- X_test
+
+train_label <- label
+test_label <- test_label
+
+# # Identify the column index of the "intercept" column
+intercept_col <- which(colnames(train_X) == "(Intercept)")
+
+# Remove the "intercept" column
+train_X <- train_X[, -intercept_col]
+
+intercept_col <- which(colnames(test_X) == "(Intercept)")
+
+# Remove the "intercept" column
+test_X <- test_X[, -intercept_col]
+
+# Fit logistic regression model
+logistic_model <- glm(train_label ~ ., data = train_df, family = binomial)
+
+# Predict labels for test data
+pred_probs <- predict(logistic_model, newdata = test_df, type = "response")
+
+# Convert predicted probabilities to binary predictions (0 or 1)
+predictions <- ifelse(pred_probs > 0.5, 1, 0)
+
+# Calculate accuracy
+accuracy <- mean(predictions == test_label)
+
+# Print accuracy
+cat("Model accuracy:", accuracy, "\n")
+```
+The second model I tried is Support Vector Machine with radial kernal since the data is multi-dimensional. For this model, the accuracy is 72.5% for the testing dataset.
+
+```{r}
+# Fit SVM model
+svm_model <- svm(train_X, train_label, kernel = "radial")
+
+# Predict labels for test data
+predictions <- predict(svm_model, test_X)
+predictions <- ifelse(predictions > 0.5, 1, 0)
+
+# Calculate accuracy
+accuracy <- mean(predictions == test_label)
+
+# Print accuracy
+cat("Model accuracy:", accuracy, "\n")
+```
+Lastly, I picked gradient boosting model to predict the success variable. Gradient boosting model are highly effective for predicting success due to their flexibility, ensemble learning approach, and robust performance. By capturing complex non-linear relationships between predictors and outcomes, which fit the goal of this project, GBM can model patterns in the data, making them suitable for tasks where success depends on multiple factors. As a result, this model has the highest accuracy out of all 3 models which stay at 74.5% accuracy on the testing data with only 25.5% misclassification rate.
+
+```{r}
+# Train the GBM model
+gbm_model <- gbm(train_label ~ ., data = train_df, distribution = "bernoulli", n.trees = 100, interaction.depth = 3)
+
+# Make predictions on the test data
+pred_probs <- predict(gbm_model, newdata = test_df, type = "response")
+
+# Convert predicted probabilities to binary predictions (0 or 1)
+predictions <- ifelse(pred_probs > 0.5, 1, 0)
+
+# Calculate accuracy
+accuracy <- mean(predictions == test_label)
+
+# Print accuracy
+cat("Model accuracy:", accuracy, "\n")
+conf_matrix <- confusionMatrix(as.factor(predictions), as.factor(test_label))
+conf_matrix$table
+
+# Calculate misclassification rate
+misclassification_rate <- mean(predictions != test_label)
+
+# Print misclassification rate
+cat("Misclassification rate:", misclassification_rate, "\n")
+
+```
+
+Below is a confusion matrix of the gradient boosting model and the true positive and true negative are very good while there are only a small amount false positive and negative. This show that gbm is the best model to select here to predict success.
+
+```{r echo = FALSE}
+conf_matrix_df <- as.data.frame.table(conf_matrix$table)
+
+conf_matrix_df$Freq <- as.numeric(conf_matrix_df$Freq)
+
+ggplot(data = conf_matrix_df, aes(x = Prediction, y = Reference, fill = Freq)) +
+  geom_tile(color = "white") +
+  geom_text(aes(label = Freq), vjust = 1) +
+  scale_fill_gradient(low = "white", high = "blue") +
+  labs(x = "Predicted Class", y = "Actual Class", title = "Confusion Matrix") +
+  theme_minimal()
+```
+
+# Discussion
+
+The gradient boosting model trained on the provided data achieved an accuracy score of 0.745, indicating that it correctly classified approximately 74.5% of the instances. In comparison to the logistic regression model and Support Vector Machine, the GBM performed the best, with the other two models achieving accuracies of 73% and 72.5% respectively. The model's performance was assessed using a confusion matrix to examine the misclassification rate, revealing that out of the actual negative instances, 5 were correctly classified as negative, while 1 was incorrectly classified as positive. Similarly, out of the actual positive instances, 144 were correctly classified as positive, while 50 were incorrectly classified as negative. Overall, the model's performance is moderate, with potential for enhancement, particularly in correctly identifying positive and negative instances. In the future, I would consider experimenting with a neural network to determine if its performance surpasses that of the current model, as neural networks are renowned for their classification capabilities and suitability for handling big data with numerous features.
+
+# Session Info
+```{r}
+sessionInfo()
+```
+
+# References
+
+1. ChatGPT
+
+  - https://chat.openai.com/share/7eceffe3-efa0-43d5-833e-b339960e3a52
+
+2. Discussion Note
+
+3. Lecture Note
