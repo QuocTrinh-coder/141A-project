@@ -17,7 +17,7 @@ library(gbm)
 ```
 # Abstract
 
-  In this project, I analyze a portion of a study of mouse brain done by Steinmetz Nicholas A. Steinmetz, Peter Zatka-Haas, Matteo Carandini & Kenneth D. Harris. These 4 authors are professors from University College London in the UK. Specifically, I will examine the mouses' brain activity as they were given visual stimuli randomly on two screens positioned on both sides of it. This project will focus on 4 mouses out of 10 mouses over 18 sessions out of 39 from the original data. In each session, there will be hundreds of trials and record of neurons' activities in the mice's visual cortex. These activities then recorded in the form of spike trains, which are collections of timestamps corresponding to neuron firing. The four mouses that will be focused on are called : Cori, Forssman, Hence, and Lederberg. I began the project by examining the data structure across 18 sessions and transform it into a dataframe. Additionally, I also create a dataframe specficially for a case study of the spikes activities for session 8 trial 8. After that, a thorough exploratory data analysis was conducted in order to examine for patterns across all 18 sessions and the spikes activities over times across trials within session 8. Then, I performed data integration with the purpose of combining all sessions together into 1 dataframe for model building process and filter out neccessary features. Finally, I fitted multiple models and picked the highest accuracy model with the goal of classifying whether a trial will be a success or failure. This project aims to uncover insights into the relationship between neural activity and decision-making processe of mouses and examining whether it is possible to predict a trial outcome ( success or failure of turning the wheel to the correct side base of the contrast differences ) using multiple features that produced by the mouse over certain time within each trial. 
+  In this project, I analyze a portion of a study of mouse brain done by Steinmetz Nicholas A. Steinmetz, Peter Zatka-Haas, Matteo Carandini & Kenneth D. Harris. These 4 authors are professors from University College London in the UK. Specifically, I will examine the mouses' brain activity as they were given visual stimuli randomly on two screens positioned on both sides of it. This project will focus on 4 mouses out of 10 mouses over 18 sessions out of 39 from the original data. In each session, there will be hundreds of trials and record of neurons' activities in the mice's visual cortex. These activities then recorded in the form of spike trains, which are collections of timestamps corresponding to neuron firing. The four mouses that will be focused on are called : Cori, Forssman, Hence, and Lederberg. I began the project by examining the data structure across 18 sessions and transform it into a dataframe. Additionally, I also create a dataframe specifically for a case study of the spikes activities for session 8 trial 8. After that, a thorough exploratory data analysis was conducted in order to examine for patterns across all 18 sessions and the spikes activities over times across trials within session 8. Then, I performed data integration with the purpose of combining all sessions together into 1 dataframe for model building process and filter out necessary features. Finally, I fitted multiple models and picked the highest accuracy model with the goal of classifying whether a trial will be a success or failure. This project aims to uncover insights into the relationship between neural activity and decision-making processe of mouses and examining whether it is possible to predict a trial outcome ( success or failure of turning the wheel to the correct side base of the contrast differences ) using multiple features that produced by the mouse over certain time within each trial. 
 
 # Introduction
 
@@ -95,26 +95,21 @@ for(i in 1:total_session){
 
 meta = as.data.frame(meta)
 
-# Define a function to calculate average spikes per neuron
 calculate_avg_spks <- function(session_data) {
   total_spikes <- sum(unlist(lapply(session_data$spks, function(x) sum(x))))
   total_neurons <- sum(unlist(lapply(session_data$spks, function(x) nrow(x))))
   return(total_spikes / total_neurons)
 }
 
-# Calculate average spikes for each session and add it as a new column in the meta data frame
 meta$avg_spks <- sapply(session, calculate_avg_spks)
                                      
-# Define a function to calculate contrast difference for a session
 calculate_contrast_difference <- function(session_data) {
   abs_diff <- abs(session_data$contrast_left - session_data$contrast_right)
   return(mean(abs_diff))
 }
 
-# Calculate contrast difference for each session and add it as a new column in the meta data frame
 meta$contrast_difference <- sapply(session, calculate_contrast_difference)
 
-# creates a formatted table with a header, styling, and a footnote describing the data structure across sessions
 table_footnote <- "Table 1.Data Structure across Sessions"
 
 meta_table <- meta %>%
@@ -123,7 +118,6 @@ meta_table <- meta %>%
   kable_styling() %>%
   add_footnote(c(table_footnote))
 
-# Display the updated meta data frame
 meta_table
 ```
 
@@ -140,12 +134,11 @@ spk.count <- apply(spk.trial, 1, sum)
 
 spk.average.tapply <- tapply(spk.count, area, mean)
 
-# To use dplyr you need to create a data frame
 tmp <- data.frame(
   area = area,
   spikes = spk.count
 )
-# Calculate the average by group using dplyr
+
 spk.average.dplyr <- tmp %>%
   group_by(area) %>%
   summarize(mean = mean(spikes))
@@ -162,8 +155,6 @@ average_spike_area <- function(i.t, this_session) {
 n.trial <- length(session[[i.s]]$feedback_type)
 n.area <- length(unique(session[[i.s]]$brain_area))
 
-# We will create a data frame that contains the average spike counts for each area, feedback type, the two contrasts, and the trial id
-
 trial.summary <- matrix(nrow = n.trial, ncol = n.area + 1 + 2 + 1)
 for(i.t in 1:n.trial) {
   trial.summary[i.t,] <- c(average_spike_area(i.t, this_session = session[[i.s]]),
@@ -176,7 +167,6 @@ for(i.t in 1:n.trial) {
 colnames(trial.summary) <- c(names(average_spike_area(i.t, this_session = session[[i.s]])), 
                               'feedback', 'left contr.', 'right contr.', 'id')
 
-# Turning it into a data frame
 trial.summary <- as_tibble(trial.summary)
 head(trial.summary)
 ```
@@ -344,8 +334,6 @@ mtext("Session 8 Trial 30 feedback", side = 1, line = 4.1, font = 1)
 iii) For this part, I will examine the changes across trials in session 8. From the plot below we can clearly see that PO neural activity has highest average spikes counts in all trials and root activity has lowest average spikes count as it fluctuates between 0 and 0.5. An interesting observation that I found is during the 200th trial, it looks like all the neural activity dropped down in term of spikes counts. This is an interesting finding since there could be some factor that impact the average spike counts specifically at the 200th trial.
 
 ```{r echo = FALSE}
-
-# Set the y-axis limits to include negative values
 plot(x = 1, y = 0, col = 'white', xlim = c(0, n.trial), ylim = c(0, 3), 
      xlab = "Trials", ylab = "Average spike counts", 
      main = paste("Spikes per area in Session", i.s))
@@ -367,7 +355,6 @@ mtext("Figure 9. Average spike count across trails in session 8", side = 1, line
 Lastly, in figure 10, this show the brain areas neural activity as the session number increased. This graph below indicate that not all brain area have the same neural activities as the visual stimuli presented. Some brain areas have higher amount of spikes compare to others. This make sense since different brain areas response for different function and some brain areas responsible for visual which make them have higher spikes when visual stimuli was presented.
 
 ```{r echo = FALSE}
-# Create a data frame with session number and brain areas
 session_brain_areas_df <- data.frame(
   session_number = rep(1:total_session, meta$num_brain_area),
   brain_area = unlist(lapply(session, function(s) unique(s$brain_area)))
@@ -436,7 +423,6 @@ full_functional_tibble$contrast_diff <- abs(full_functional_tibble$contrast_left
 full_functional_tibble$success <- full_functional_tibble$feedback_type == 1
 full_functional_tibble$success <- as.numeric(full_functional_tibble$success)
 
-# View the updated data frame
 head(full_functional_tibble)
 ```
 
@@ -583,7 +569,6 @@ recall <- conf_matrix$byClass['Sensitivity']
 # Calculate precision score
 precision <- conf_matrix$byClass['Pos Pred Value']
 
-# Calculate misclassification rate
 misclassification_rate <- 1 - accuracy
 
 # Print the results
@@ -643,7 +628,6 @@ recall <- conf_matrix$byClass['Sensitivity']
 # Calculate precision score
 precision <- conf_matrix$byClass['Pos Pred Value']
 
-# Print the results
 cat("F1 Score:", F1_score, "\n")
 cat("Recall:", recall, "\n")
 cat("Precision Score:", precision, "\n")
