@@ -1,6 +1,6 @@
 ---
-title: "141A-project"
-author: "QuocTrinh"
+title: "A Study On Mice Neural Behavior Given Visual Stimuli and Predicting Success Rate of each Trial"
+author: "Quoc Trinh"
 date: "2024-03-18"
 output: html_document
 ---
@@ -181,8 +181,6 @@ trial.summary <- as_tibble(trial.summary)
 head(trial.summary)
 ```
 
-### How does neural activities change as the number of session increase ?
-
 From the graph below, the trend indiciate that as the session number increase, the overall neuron spike rate also increase. However, toward the end of the 18 sessions, the neuron spike rate decreased. This might indicated that the brain of the mouses from session 15 to 18 didn't get effect much after getting the visual stimuli.
 
 ```{r echo = FALSE}
@@ -279,7 +277,7 @@ ggplot(meta, aes(x = num_trials, y = success_rate, group = mouse_name, color = m
 
 In figure 8, this is a bar graph showing the success rate across all session. There is a trend showing that the success rate slowly increased as the session number increased. This indicate that the effect of the visual stimuli didn't impact the neural activity as much early on as later.
 
-```{r}
+```{r echo = FALSE}
 ggplot(meta, aes(x = factor(1:total_session), y = success_rate)) +
   geom_bar(stat = "identity", fill = "skyblue") +
   labs(x = "Session Number", y = "Success Rate") +
@@ -365,6 +363,8 @@ legend("topright",
 
 mtext("Figure 9. Average spike count across trails in session 8", side = 1, line = 4)
 ```
+
+Lastly, in figure 10, this show the brain areas neural activity as the session number increased. This graph below indicate that not all brain area have the same neural activities as the visual stimuli presented. Some brain areas have higher amount of spikes compare to others. This make sense since different brain areas response for different function and some brain areas responsible for visual which make them have higher spikes when visual stimuli was presented.
 
 ```{r echo = FALSE}
 # Create a data frame with session number and brain areas
@@ -512,7 +512,7 @@ plot(pca_result, type = 'l')
 
 As a final step before model fitting, I chose the features that I will be fitting into the model. For this, I chose trail id, contrast left, contrast right, contrast diff, and all the time bins.
 
-```{r}
+```{r echo = FALSE}
 predictive_feature <- c("trail_id","contrast_left", "contrast_right",  "contrast_diff" , binename)
 
 predictive_dat <- full_functional_tibble[predictive_feature]
@@ -533,7 +533,7 @@ head(full_functional_tibble[predictive_feature])
 
 For the first model, I examined logistic regression since it is a computationally expensive model which fit well for this project since there are a lot of predictive features. Furthermore, logistic regression model is famous for binary classification which is what I am trying to do with the success variable ( 0 or 1 ). This model achieved with a 73% accuracy on the testing dataset.
 
-```{r}
+```{r echo = FALSE}
 set.seed(123) # for reproducibility
 
 train_df <- predictive_dat
@@ -600,19 +600,16 @@ set.seed(123)
 # Fit SVM model
 svm_model <- svm(train_X, train_label, kernel = "radial")
 
-# Predict labels for test data
 predictions <- predict(svm_model, test_X)
 predictions <- ifelse(predictions > 0.5, 1, 0)
 
-# Calculate accuracy
 accuracy <- mean(predictions == test_label)
 
-# Print accuracy
 cat("Model accuracy:", accuracy, "\n")
 ```
 Lastly, I picked gradient boosting model to predict the success variable. Gradient boosting model are highly effective for predicting success due to their flexibility, ensemble learning approach, and robust performance. By capturing complex non-linear relationships between predictors and outcomes, which fit the goal of this project, GBM can model patterns in the data, making them suitable for tasks where success depends on multiple factors. As a result, this model has the highest accuracy out of all 3 models which stay at 74.5% accuracy on the testing data with only 25.5% misclassification rate.
 
-```{r}
+```{r echo = FALSE}
 set.seed(123)
 # Train the GBM model
 gbm_model <- gbm(train_label ~ ., data = train_df, distribution = "bernoulli", n.trees = 100, interaction.depth = 3)
@@ -629,7 +626,6 @@ accuracy <- mean(predictions == test_label)
 # Print accuracy
 cat("Model accuracy:", accuracy, "\n")
 conf_matrix <- confusionMatrix(as.factor(predictions), as.factor(test_label))
-conf_matrix$table
 
 # Calculate misclassification rate
 misclassification_rate <- mean(predictions != test_label)
