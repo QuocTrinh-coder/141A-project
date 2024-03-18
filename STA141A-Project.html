@@ -659,10 +659,6 @@ relationship between neural activity and decision-making processes.</p>
 </div>
 <div id="data-structure" class="section level1">
 <h1>Data Structure</h1>
-<pre class="r"><code>test &lt;- list()
-for (i in 1:2) {
-  test[[i]] &lt;- readRDS(paste(&#39;C:/Users/Harry Trinh/Downloads/testing/test&#39;, i, &#39;.rds&#39;, sep=&#39;&#39;))
-}</code></pre>
 <div id="attributes-within-each-sessions" class="section level3">
 <h3>Attributes Within Each Sessions</h3>
 <p>Within each trial in each session, there will be 8 variables as they
@@ -1417,10 +1413,36 @@ accuracy &lt;- mean(predictions == test_label)
 # Print accuracy
 cat(&quot;Model accuracy:&quot;, accuracy, &quot;\n&quot;)</code></pre>
 <pre><code>## Model accuracy: 0.73</code></pre>
+<pre class="r"><code># Create confusion matrix
+conf_matrix &lt;- confusionMatrix(as.factor(predictions), as.factor(test_label))
+
+# Calculate F1 score
+F1_score &lt;- 2 * conf_matrix$byClass[&#39;Pos Pred Value&#39;] * conf_matrix$byClass[&#39;Sensitivity&#39;] /
+            (conf_matrix$byClass[&#39;Pos Pred Value&#39;] + conf_matrix$byClass[&#39;Sensitivity&#39;])
+
+# Calculate recall
+recall &lt;- conf_matrix$byClass[&#39;Sensitivity&#39;]
+
+# Calculate precision score
+precision &lt;- conf_matrix$byClass[&#39;Pos Pred Value&#39;]
+
+# Calculate misclassification rate
+misclassification_rate &lt;- 1 - accuracy
+
+# Print the results
+cat(&quot;F1 Score:&quot;, F1_score, &quot;\n&quot;)</code></pre>
+<pre><code>## F1 Score: 0.06896552</code></pre>
+<pre class="r"><code>cat(&quot;Recall:&quot;, recall, &quot;\n&quot;)</code></pre>
+<pre><code>## Recall: 0.03636364</code></pre>
+<pre class="r"><code>cat(&quot;Precision Score:&quot;, precision, &quot;\n&quot;)</code></pre>
+<pre><code>## Precision Score: 0.6666667</code></pre>
+<pre class="r"><code>cat(&quot;Misclassification Rate:&quot;, misclassification_rate, &quot;\n&quot;)</code></pre>
+<pre><code>## Misclassification Rate: 0.27</code></pre>
 <p>The second model I tried is Support Vector Machine with radial kernal
 since the data is multi-dimensional. For this model, the accuracy is
 72.5% for the testing dataset.</p>
-<pre class="r"><code># Fit SVM model
+<pre class="r"><code>set.seed(123)
+# Fit SVM model
 svm_model &lt;- svm(train_X, train_label, kernel = &quot;radial&quot;)
 
 # Predict labels for test data
@@ -1442,7 +1464,8 @@ model patterns in the data, making them suitable for tasks where success
 depends on multiple factors. As a result, this model has the highest
 accuracy out of all 3 models which stay at 74.5% accuracy on the testing
 data with only 25.5% misclassification rate.</p>
-<pre class="r"><code># Train the GBM model
+<pre class="r"><code>set.seed(123)
+# Train the GBM model
 gbm_model &lt;- gbm(train_label ~ ., data = train_df, distribution = &quot;bernoulli&quot;, n.trees = 100, interaction.depth = 3)
 
 # Make predictions on the test data
@@ -1469,6 +1492,23 @@ misclassification_rate &lt;- mean(predictions != test_label)
 # Print misclassification rate
 cat(&quot;Misclassification rate:&quot;, misclassification_rate, &quot;\n&quot;)</code></pre>
 <pre><code>## Misclassification rate: 0.255</code></pre>
+<pre class="r"><code># Calculate F1 score
+F1_score &lt;- 2 * conf_matrix$byClass[&#39;Pos Pred Value&#39;] * conf_matrix$byClass[&#39;Sensitivity&#39;] /
+              (conf_matrix$byClass[&#39;Pos Pred Value&#39;] + conf_matrix$byClass[&#39;Sensitivity&#39;])
+
+# Calculate recall
+recall &lt;- conf_matrix$byClass[&#39;Sensitivity&#39;]
+
+# Calculate precision score
+precision &lt;- conf_matrix$byClass[&#39;Pos Pred Value&#39;]
+
+# Print the results
+cat(&quot;F1 Score:&quot;, F1_score, &quot;\n&quot;)</code></pre>
+<pre><code>## F1 Score: 0.1904762</code></pre>
+<pre class="r"><code>cat(&quot;Recall:&quot;, recall, &quot;\n&quot;)</code></pre>
+<pre><code>## Recall: 0.1090909</code></pre>
+<pre class="r"><code>cat(&quot;Precision Score:&quot;, precision, &quot;\n&quot;)</code></pre>
+<pre><code>## Precision Score: 0.75</code></pre>
 <p>Below is a confusion matrix of the gradient boosting model and the
 true positive and true negative are very good while there are only a
 small amount false positive and negative. This show that gbm is the best
@@ -1479,21 +1519,29 @@ model to select here to predict success.</p>
 <h1>Discussion</h1>
 <p>The gradient boosting model trained on the provided data achieved an
 accuracy score of 0.745, indicating that it correctly classified
-approximately 74.5% of the instances. In comparison to the logistic
-regression model and Support Vector Machine, the GBM performed the best,
-with the other two models achieving accuracies of 73% and 72.5%
-respectively. The model’s performance was assessed using a confusion
-matrix to examine the misclassification rate, revealing that out of the
-actual negative instances, 5 were correctly classified as negative,
-while 1 was incorrectly classified as positive. Similarly, out of the
-actual positive instances, 144 were correctly classified as positive,
-while 50 were incorrectly classified as negative. Overall, the model’s
-performance is moderate, with potential for enhancement, particularly in
-correctly identifying positive and negative instances. In the future, I
-would consider experimenting with a neural network to determine if its
-performance surpasses that of the current model, as neural networks are
-renowned for their classification capabilities and suitability for
-handling big data with numerous features.</p>
+approximately 74.5% of the instances with only 25.5% misclassification
+rate which is better than the logistic regression with 27%
+misclassification rate. In comparison to the logistic regression model
+and Support Vector Machine, the GBM performed the best, with the other
+two models achieving accuracies of 73% and 72.5% respectively. The
+model’s performance was assessed using a confusion matrix to examine the
+misclassification rate, revealing that out of the actual negative
+instances, 6 were correctly classified as negative, while 2 was
+incorrectly classified as positive. Similarly, out of the actual
+positive instances, 143 were correctly classified as positive, while 49
+were incorrectly classified as negative.The sensitivity, also referred
+to as recall, of the gbm model stood at 0.1090909, implying a limited
+capability to accurately recognize positive instances. Meanwhile, the
+positive predictive value, or precision, was 0.75, indicating that when
+the model predicted a positive outcome, it was accurate 75% of the time.
+Combining precision and recall, the F1-score amounted to 0.1904762.
+Overall, the model’s performance is moderate, with potential for
+enhancement, particularly in correctly identifying positive and negative
+instances. In the future, I would consider experimenting with a neural
+network to determine if its performance surpasses that of the current
+model, as neural networks are renowned for their classification
+capabilities and suitability for handling big data with numerous
+features.</p>
 </div>
 <div id="session-info" class="section level1">
 <h1>Session Info</h1>

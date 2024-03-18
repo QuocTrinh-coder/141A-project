@@ -43,10 +43,10 @@ for (i in 1:18) {
 }
 ```
 
-```{r}
+```{r echo = FALSE}
 test <- list()
 for (i in 1:2) {
-  test[[i]] <- readRDS(paste('C:/Users/Harry Trinh/Downloads/testing/test', i, '.rds', sep=''))
+  test[[i]] <- readRDS(paste('C:/Users/Harry Trinh/Downloads/test/test', i, '.rds', sep=''))
 }
 ```
 
@@ -439,6 +439,7 @@ full_functional_tibble$success <- as.numeric(full_functional_tibble$success)
 # View the updated data frame
 head(full_functional_tibble)
 ```
+
 ```{r echo = FALSE}
 # Test
 binename <- paste0("bin", as.character(1:40))
@@ -568,10 +569,34 @@ accuracy <- mean(predictions == test_label)
 
 # Print accuracy
 cat("Model accuracy:", accuracy, "\n")
+
+# Create confusion matrix
+conf_matrix <- confusionMatrix(as.factor(predictions), as.factor(test_label))
+
+# Calculate F1 score
+F1_score <- 2 * conf_matrix$byClass['Pos Pred Value'] * conf_matrix$byClass['Sensitivity'] /
+            (conf_matrix$byClass['Pos Pred Value'] + conf_matrix$byClass['Sensitivity'])
+
+# Calculate recall
+recall <- conf_matrix$byClass['Sensitivity']
+
+# Calculate precision score
+precision <- conf_matrix$byClass['Pos Pred Value']
+
+# Calculate misclassification rate
+misclassification_rate <- 1 - accuracy
+
+# Print the results
+cat("F1 Score:", F1_score, "\n")
+cat("Recall:", recall, "\n")
+cat("Precision Score:", precision, "\n")
+cat("Misclassification Rate:", misclassification_rate, "\n")
 ```
+
 The second model I tried is Support Vector Machine with radial kernal since the data is multi-dimensional. For this model, the accuracy is 72.5% for the testing dataset.
 
 ```{r}
+set.seed(123)
 # Fit SVM model
 svm_model <- svm(train_X, train_label, kernel = "radial")
 
@@ -588,6 +613,7 @@ cat("Model accuracy:", accuracy, "\n")
 Lastly, I picked gradient boosting model to predict the success variable. Gradient boosting model are highly effective for predicting success due to their flexibility, ensemble learning approach, and robust performance. By capturing complex non-linear relationships between predictors and outcomes, which fit the goal of this project, GBM can model patterns in the data, making them suitable for tasks where success depends on multiple factors. As a result, this model has the highest accuracy out of all 3 models which stay at 74.5% accuracy on the testing data with only 25.5% misclassification rate.
 
 ```{r}
+set.seed(123)
 # Train the GBM model
 gbm_model <- gbm(train_label ~ ., data = train_df, distribution = "bernoulli", n.trees = 100, interaction.depth = 3)
 
@@ -611,11 +637,27 @@ misclassification_rate <- mean(predictions != test_label)
 # Print misclassification rate
 cat("Misclassification rate:", misclassification_rate, "\n")
 
+# Calculate F1 score
+F1_score <- 2 * conf_matrix$byClass['Pos Pred Value'] * conf_matrix$byClass['Sensitivity'] /
+              (conf_matrix$byClass['Pos Pred Value'] + conf_matrix$byClass['Sensitivity'])
+
+# Calculate recall
+recall <- conf_matrix$byClass['Sensitivity']
+
+# Calculate precision score
+precision <- conf_matrix$byClass['Pos Pred Value']
+
+# Print the results
+cat("F1 Score:", F1_score, "\n")
+cat("Recall:", recall, "\n")
+cat("Precision Score:", precision, "\n")
+
 ```
 
 Below is a confusion matrix of the gradient boosting model and the true positive and true negative are very good while there are only a small amount false positive and negative. This show that gbm is the best model to select here to predict success.
 
 ```{r echo = FALSE}
+set.seed(123)
 conf_matrix_df <- as.data.frame.table(conf_matrix$table)
 
 conf_matrix_df$Freq <- as.numeric(conf_matrix_df$Freq)
@@ -630,7 +672,8 @@ ggplot(data = conf_matrix_df, aes(x = Prediction, y = Reference, fill = Freq)) +
 
 # Discussion
 
-The gradient boosting model trained on the provided data achieved an accuracy score of 0.745, indicating that it correctly classified approximately 74.5% of the instances. In comparison to the logistic regression model and Support Vector Machine, the GBM performed the best, with the other two models achieving accuracies of 73% and 72.5% respectively. The model's performance was assessed using a confusion matrix to examine the misclassification rate, revealing that out of the actual negative instances, 5 were correctly classified as negative, while 1 was incorrectly classified as positive. Similarly, out of the actual positive instances, 144 were correctly classified as positive, while 50 were incorrectly classified as negative. Overall, the model's performance is moderate, with potential for enhancement, particularly in correctly identifying positive and negative instances. In the future, I would consider experimenting with a neural network to determine if its performance surpasses that of the current model, as neural networks are renowned for their classification capabilities and suitability for handling big data with numerous features.
+The gradient boosting model trained on the provided data achieved an accuracy score of 0.745, indicating that it correctly classified approximately 74.5% of the instances with only 25.5% misclassification rate which is better than the logistic regression with 27% misclassification rate. In comparison to the logistic regression model and Support Vector Machine, the GBM performed the best, with the other two models achieving accuracies of 73% and 72.5% respectively. The model's performance was assessed using a confusion matrix to examine the misclassification rate, revealing that out of the actual negative instances, 6 were correctly classified as negative, while 2 was incorrectly classified as positive. Similarly, out of the actual positive instances, 143 were correctly classified as positive, while 49 were incorrectly classified as negative.The sensitivity, also referred to as recall, of the gbm model stood at 0.1090909, implying a limited capability to accurately recognize positive instances. Meanwhile, the positive predictive value, or precision, was 0.75, indicating that when the model predicted a positive outcome, it was accurate 75% of the time. Combining precision and recall, the F1-score amounted to 0.1904762. Overall, the model's performance is moderate, with potential for enhancement, particularly in correctly identifying positive and negative instances. In the future, I would consider experimenting with a neural network to determine if its performance surpasses that of the current model, as neural networks are renowned for their classification capabilities and suitability for handling big data with numerous features.
+
 
 # Session Info
 ```{r}
